@@ -2,22 +2,24 @@ import torch
 import torchvision.datasets as datasets
 import torchvision.transforms as transforms
 import matplotlib.pyplot as plt
+import torchvision
 import numpy as np
 from torch.utils.data import Dataset, DataLoader
 
 torch.manual_seed(42)
 torch.cuda.manual_seed_all(42)
 
-class Transform:
-    def __init__(self):
-        self.transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]) # 데이터 정규화
+dataset = torchvision.datasets.CIFAR10(root='./data/cifar10', train=True, download=True)
+mean = dataset.data.mean(axis=(0,1,2))
+std = dataset.data.std(axis=(0,1,2))
+mean = mean / 255
+std = std / 255
 
-    def __call__(self, image):
-        return self.transform(image)
+print(mean, std)
 
 class MyDataset(Dataset):
     def __init__(self, transform=None):
-        self.trainset = datasets.CIFAR10(root='./data', train=True, download=True)
+        self.trainset = dataset
         self.transform = transform
 
     def __len__(self):
@@ -28,10 +30,10 @@ class MyDataset(Dataset):
         if self.transform:
             image = self.transform(image)
         return image, label
-
-# CustomTransform 클래스를 사용하여 transform을 정의
-custom_transform = Transform()
-custom_dataset = MyDataset(transform=custom_transform)
+    
+transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((mean), (std))]) # 데이터 정규화
+    
+custom_dataset = MyDataset(transform=transform)
 
 loader = DataLoader(dataset=custom_dataset, batch_size=8, shuffle=True)
 
@@ -39,7 +41,12 @@ data_iter = iter(loader)
 
 images, labels = next(data_iter) # 이터
 
-images = images / 2 + 0.5  # 데이터 표준화 복원
+def denormalize(imgs, mean, std): #역정규화를 정의
+    mean = torch.tensor(mean).view(1, 3, 1, 1) #view는 텐서의 차원에 따라 브로드 캐스팅이 불가능 할 수 있기에 모양을 바꿔줌.
+    std = torch.tensor(std).view(1, 3, 1, 1)
+    return imgs * std + mean
+
+images = denormalize(images, mean, std).clamp(0, 1) #특정 픽셀의 값이 유효범위인 [0,1]을 벗어날 수 있기에 강제함
 
 fig, axes = plt.subplots(2, 4, figsize=(10, 5)) # 각 사진 사이즈 설정
 
